@@ -22,10 +22,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Your configuration
-BOT_TOKEN = config.BOT_TOKEN
-UPI_ID = config.UPI_ID
-ADMIN_ID = config.ADMIN_ID
+# Configuration from environment variables (for deployment) or config.py
+BOT_TOKEN = os.environ.get('BOT_TOKEN', config.BOT_TOKEN)
+UPI_ID = os.environ.get('UPI_ID', config.UPI_ID)
+ADMIN_ID = int(os.environ.get('ADMIN_ID', config.ADMIN_ID))
+PORT = int(os.environ.get('PORT', 8443))
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', '')
 
 # Define states for conversation
 SELECT_PLAN, PAYMENT_CONFIRMATION, UPLOAD_SCREENSHOT = range(3)
@@ -71,9 +73,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await delete_previous_message(update, context)
     
     keyboard = [
-        [InlineKeyboardButton("1 Month - ₹299", callback_data="plan_1_month")],
-        [InlineKeyboardButton("3 Months - ₹799", callback_data="plan_3_months")],
-        [InlineKeyboardButton("6 Months - ₹1499", callback_data="plan_6_months")],
+        [InlineKeyboardButton("1 Month - ₹99", callback_data="plan_1_month")],  # Fixed price
+        [InlineKeyboardButton("3 Months - ₹249", callback_data="plan_3_months")],  # Fixed price
+        [InlineKeyboardButton("6 Months - ₹499", callback_data="plan_6_months")],  # Fixed price
         [InlineKeyboardButton("ℹ️ How It Works", callback_data="how_it_works")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -299,9 +301,9 @@ async def start_from_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     await delete_previous_message(update, context)
     
     keyboard = [
-        [InlineKeyboardButton("1 Month - ₹299", callback_data="plan_1_month")],
-        [InlineKeyboardButton("3 Months - ₹799", callback_data="plan_3_months")],
-        [InlineKeyboardButton("6 Months - ₹1499", callback_data="plan_6_months")],
+        [InlineKeyboardButton("1 Month - ₹99", callback_data="plan_1_month")],  # Fixed price
+        [InlineKeyboardButton("3 Months - ₹249", callback_data="plan_3_months")],  # Fixed price
+        [InlineKeyboardButton("6 Months - ₹499", callback_data="plan_6_months")],  # Fixed price
         [InlineKeyboardButton("ℹ️ How It Works", callback_data="how_it_works")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -322,10 +324,16 @@ async def back_to_plans(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await start_from_callback(update, context)
 
 def main() -> None:
-    """Start the bot."""
+    """Start the bot in webhook mode."""
+    
+    # Check if BOT_TOKEN is set
+    if not BOT_TOKEN or BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+        logger.error("BOT_TOKEN is not set! Please set it in environment variables or config.py")
+        return
+    
     # Create the Application
     application = Application.builder().token(BOT_TOKEN).build()
-
+    
     # Create conversation handler
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -348,13 +356,35 @@ def main() -> None:
         name="membership_conversation",
         persistent=False
     )
-
+    
     # Add handlers
     application.add_handler(conv_handler)
     
-    # Start the bot
-    print("🤖 Bot is starting...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Webhook mode for deployment
+    if WEBHOOK_URL:
+        logger.info(f"Starting bot in webhook mode on port {PORT}")
+        logger.info(f"Webhook URL: {WEBHOOK_URL}")
+        
+        # Set webhook
+        async def set_webhook_on_startup(app):
+            await app.bot.set_webhook(
+                url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+                drop_pending_updates=True
+            )
+            logger.info("Webhook set successfully")
+        
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+            url_path=BOT_TOKEN,
+            secret_token='WEBHOOK_SECRET',  # Optional security
+            drop_pending_updates=True
+        )
+    else:
+        # Polling mode for local development
+        logger.info("Starting bot in polling mode (local development)")
+        application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
