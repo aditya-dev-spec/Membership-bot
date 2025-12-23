@@ -21,5 +21,6 @@ A fully-featured Telegram bot for managing premium membership subscriptions with
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/telegram-membership-bot.git
+git clone https://github.com/aditya-dev-spec/telegram-membership-bot.git
+
 cd telegram-membership-bot
